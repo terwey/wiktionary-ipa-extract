@@ -1,13 +1,13 @@
 name: Wiktionary IPA Extractor
 
 on:
+  # Manual trigger via the GitHub Actions tab
+  workflow_dispatch:
+  
   # Trigger the build and release of binaries only when Go code changes
   push:
     paths:
       - '**/*.go'  # Trigger when any Go code changes
-
-  # Manual trigger via the GitHub Actions tab
-  workflow_dispatch:
   
   # Trigger the nightly data ingestion job to check the RSS feed and process the data
   schedule:
