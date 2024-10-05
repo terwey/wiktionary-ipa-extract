@@ -87,6 +87,7 @@ jobs:
           else
             echo "No new dump available, exiting."
             exit 0
+          fi
 
       # Step 3: Sanitize the dump date for use in tags and file names
       - name: Sanitize and set release tag
