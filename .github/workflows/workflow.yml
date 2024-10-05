@@ -68,9 +68,18 @@ jobs:
       - name: Fetch RSS and check timestamp
         id: check_dump
         run: |
-          latest_dump_date=$(curl -s https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2-rss.xml | grep -oP '(?<=<pubDate>).*?(?=</pubDate>)')
-          last_run_date=$(cat last_run_timestamp.txt || echo "none")
+          # Check if last_run_timestamp.txt exists, if not initialize it
+          if [ ! -f last_run_timestamp.txt ]; then
+            echo "none" > last_run_timestamp.txt
+          fi
 
+          # Get the latest dump date from the RSS feed
+          latest_dump_date=$(curl -s https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2-rss.xml | grep -oP '(?<=<pubDate>).*?(?=</pubDate>)')
+
+          # Read the last run date from the file
+          last_run_date=$(cat last_run_timestamp.txt)
+
+          # Compare dates and proceed if the latest dump is new
           if [ "$last_run_date" != "$latest_dump_date" ]; then
             echo "New dump found, proceeding with extraction."
             echo "$latest_dump_date" > last_run_timestamp.txt
@@ -78,6 +87,7 @@ jobs:
           else
             echo "No new dump available, exiting."
             exit 0
+          fi
 
       # Step 3: Sanitize the dump date for use in tags and file names
       - name: Sanitize and set release tag
