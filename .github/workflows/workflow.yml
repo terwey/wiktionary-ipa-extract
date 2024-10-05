@@ -70,40 +70,40 @@ jobs:
         run: |
           latest_dump_date=$(curl -s https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2-rss.xml | grep -oP '(?<=<pubDate>).*?(?=</pubDate>)')
           last_run_date=$(cat last_run_timestamp.txt || echo "none")
-          
+
           if [ "$last_run_date" != "$latest_dump_date" ]; then
             echo "New dump found, proceeding with extraction."
             echo "$latest_dump_date" > last_run_timestamp.txt
+            echo "::set-output name=latest_dump_date::$latest_dump_date"
           else
             echo "No new dump available, exiting."
             exit 0
-          fi
 
-      # Step 3: Check if binary exists, otherwise build it
-      - name: Check and build binary if necessary
+      # Step 3: Sanitize the dump date for use in tags and file names
+      - name: Sanitize and set release tag
+        id: sanitize_tag
         run: |
-          if [ ! -f ./wiktionary-ipa-extract ]; then
-            docker pull golang:latest
-            docker run --name go-build-linux -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "go build -o wiktionary-ipa-extract cmd/wiktionary-ipa-extract/main.go"
-          fi
+          sanitized_date=$(echo "${{ steps.check_dump.outputs.latest_dump_date }}" | sed 's/[: ]/-/g')
+          echo "::set-output name=tag::auto-release-$sanitized_date"
+          echo "::set-output name=sanitized_date::$sanitized_date"
 
       # Step 4: Process the latest data dump using the binary
       - name: Process Wiktionary Dump
         run: |
-          curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl
+          curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ steps.sanitize_tag.outputs.sanitized_date }}.jsonl
 
       - name: Gzip the JSONL file
         run: |
-          gzip -9 enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl
+          gzip -9 enwiktionary-latest-pages-articles-${{ steps.sanitize_tag.outputs.sanitized_date }}.jsonl
 
       # Step 5: Create Release for processed JSONL file
       - name: Release Processed JSONL File
         uses: ncipollo/release-action@v1
         with:
-          tag: "auto-release-${{ steps.check_dump.outputs.latest_dump_date }}"  # Automatically generated tag
-          name: "Wiktionary Data Processed - ${{ steps.check_dump.outputs.latest_dump_date }}"
-          body: "Automated data release for dump ${{ steps.check_dump.outputs.latest_dump_date }}"
+          tag: ${{ steps.sanitize_tag.outputs.tag }}  # Use the sanitized tag
+          name: "Wiktionary Data Processed - ${{ steps.sanitize_tag.outputs.tag }}"
+          body: "Automated data release for dump ${{ steps.sanitize_tag.outputs.tag }}"
           draft: false
           prerelease: false
           artifacts: |
-            enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz
+            enwiktionary-latest-pages-articles-${{ steps.sanitize_tag.outputs.sanitized_date }}.jsonl.gz
