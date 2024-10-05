@@ -1,0 +1,127 @@
+name: Wiktionary IPA Extractor
+
+on:
+  # 1. Trigger the build and release of binaries only when Go code changes
+  push:
+    paths:
+      - '**/*.go'  # Trigger when any Go code changes
+  
+  # 2. Trigger the nightly data ingestion job to check the RSS feed and process the data
+  schedule:
+    - cron: '0 0 * * *'  # Run nightly
+
+jobs:
+  # Job for building binaries (Mac and Linux) and attaching them to the release when Go code changes
+  build-and-release-binaries:
+    if: github.event_name == 'push'  # This job runs only on code changes
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Docker container with Golang installed
+      - name: Set up Docker
+        run: |
+          docker pull golang:latest
+
+      # Step 3: Build Linux binary
+      - name: Build Linux binary
+        run: |
+          docker run --name go-build-linux -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "go build -o wiktionary-ipa-extract cmd/wiktionary-ipa-extract/main.go"
+
+      # Step 4: Build Mac binary
+      - name: Build Mac binary
+        run: |
+          docker run --name go-build-mac -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "GOOS=darwin GOARCH=amd64 go build -o wiktionary-ipa-extract-mac cmd/wiktionary-ipa-extract/main.go"
+
+      # Step 5: Create GitHub Release (for new binaries)
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: "release-${{ github.sha }}"
+          release_name: "Wiktionary IPA Extract - ${{ github.sha }}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 6: Upload Linux Binary
+      - name: Upload Linux Binary
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./wiktionary-ipa-extract
+          asset_name: wiktionary-ipa-extract-linux
+          asset_content_type: application/octet-stream
+
+      # Step 7: Upload Mac Binary
+      - name: Upload Mac Binary
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./wiktionary-ipa-extract-mac
+          asset_name: wiktionary-ipa-extract-mac
+          asset_content_type: application/octet-stream
+
+  # Job for processing the Wiktionary data based on the RSS feed using the binary
+  process-data:
+    if: github.event_name == 'schedule'  # This job runs only on the cron schedule
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      # Step 2: Fetch RSS and check timestamp
+      - name: Fetch RSS and check timestamp
+        id: check_dump
+        run: |
+          latest_dump_date=$(curl -s https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2-rss.xml | grep -oP '(?<=<pubDate>).*?(?=</pubDate>)')
+          last_run_date=$(cat last_run_timestamp.txt || echo "none")
+          
+          if [ "$last_run_date" != "$latest_dump_date" ]; then
+            echo "New dump found, proceeding with extraction."
+            echo "$latest_dump_date" > last_run_timestamp.txt
+          else
+            echo "No new dump available, exiting."
+            exit 0
+          fi
+
+      # Step 3: Check if binary exists, otherwise build it
+      - name: Check and build binary if necessary
+        run: |
+          if [ ! -f ./wiktionary-ipa-extract ]; then
+            docker pull golang:latest
+            docker run --name go-build-linux -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "go build -o wiktionary-ipa-extract cmd/wiktionary-ipa-extract/main.go"
+          fi
+
+      # Step 4: Process the latest data dump using the binary
+      - name: Process Wiktionary Dump
+        run: |
+          curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl
+
+      - name: Gzip the JSONL file
+        run: |
+          gzip -9 enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl
+
+      # Step 5: Upload Processed JSONL File to GitHub Release
+      - name: Create GitHub Release for Data
+        id: create_release_data
+        uses: actions/create-release@v1
+        with:
+          tag_name: "data-release-${{ steps.check_dump.outputs.latest_dump_date }}"
+          release_name: "Wiktionary Data Processed - ${{ steps.check_dump.outputs.latest_dump_date }}"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Processed JSONL File
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release_data.outputs.upload_url }}
+          asset_path: ./enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz
+          asset_name: enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz
+          asset_content_type: application/json
