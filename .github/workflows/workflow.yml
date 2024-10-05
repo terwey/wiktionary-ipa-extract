@@ -42,12 +42,16 @@ jobs:
         run: |
           docker run --name go-build-mac -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "GOOS=darwin GOARCH=arm64 go build -o wiktionary-ipa-extract-mac-arm64 cmd/wiktionary-ipa-extract/main.go"
 
-      # Step 5: Create Release if a tag is pushed
+      # Step 5: Create GitHub Release (without requiring tags)
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        uses: ncipollo/release-action@v1
         with:
-          files: |
+          tag: "auto-release-${{ github.sha }}"  # Automatically generated tag
+          name: "Wiktionary IPA Extract Release - ${{ github.sha }}"
+          body: "Automated release for commit ${{ github.sha }}"
+          draft: false
+          prerelease: false
+          artifacts: |
             ./wiktionary-ipa-extract-linux
             ./wiktionary-ipa-extract-mac
 
@@ -94,8 +98,12 @@ jobs:
 
       # Step 5: Create Release for processed JSONL file
       - name: Release Processed JSONL File
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        uses: ncipollo/release-action@v1
         with:
-          files: |
+          tag: "auto-release-${{ steps.check_dump.outputs.latest_dump_date }}"  # Automatically generated tag
+          name: "Wiktionary Data Processed - ${{ steps.check_dump.outputs.latest_dump_date }}"
+          body: "Automated data release for dump ${{ steps.check_dump.outputs.latest_dump_date }}"
+          draft: false
+          prerelease: false
+          artifacts: |
             enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz

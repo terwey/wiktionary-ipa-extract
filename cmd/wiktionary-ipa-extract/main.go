@@ -33,7 +33,8 @@ var (
 	inputFile  string
 	outputFile string
 
-	bz bool
+	bz       bool
+	progress bool
 )
 
 type preprocess struct {
@@ -49,6 +50,7 @@ func init() {
 	pflag.StringVarP(&outputFile, "output", "o", "", "output file")
 	pflag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	pflag.StringVar(&tracefile, "trace", "", "trace file")
+	pflag.BoolVar(&progress, "progress", false, "show progress bar")
 	pflag.BoolVar(&bz, "bz", false, "use bzip2")
 }
 
@@ -120,7 +122,10 @@ func main() {
 func process(input io.Reader, writer io.Writer) {
 	bufferedWriter := bufio.NewWriterSize(writer, 8*1024*1024)
 
-	bar := progressbar.Default(-1, "Finding IPA's")
+	bar := progressbar.DefaultSilent(-1, "Finding IPA's")
+	if progress {
+		bar = progressbar.Default(-1, "Finding IPA's")
+	}
 
 	workers := 4
 	size := 1000 * workers
