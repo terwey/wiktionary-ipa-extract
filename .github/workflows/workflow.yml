@@ -1,14 +1,18 @@
 name: Wiktionary IPA Extractor
 
 on:
-  # 1. Trigger the build and release of binaries only when Go code changes
+  # Trigger the build and release of binaries only when Go code changes
   push:
     paths:
       - '**/*.go'  # Trigger when any Go code changes
   
-  # 2. Trigger the nightly data ingestion job to check the RSS feed and process the data
+  # Trigger the nightly data ingestion job to check the RSS feed and process the data
   schedule:
     - cron: '0 0 * * *'  # Run nightly
+
+permissions:
+  packages: write
+  contents: write
 
 jobs:
   # Job for building binaries (Mac and Linux) and attaching them to the release when Go code changes
@@ -17,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Step 1: Check out the repository
-      - name: Check out repository
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       # Step 2: Set up Docker container with Golang installed
       - name: Set up Docker
@@ -33,37 +37,16 @@ jobs:
       # Step 4: Build Mac binary
       - name: Build Mac binary
         run: |
-          docker run --name go-build-mac -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "GOOS=darwin GOARCH=amd64 go build -o wiktionary-ipa-extract-mac cmd/wiktionary-ipa-extract/main.go"
+          docker run --name go-build-mac -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "GOOS=darwin GOARCH=arm64 go build -o wiktionary-ipa-extract-mac-arm64 cmd/wiktionary-ipa-extract/main.go"
 
-      # Step 5: Create GitHub Release (for new binaries)
+      # Step 5: Create Release if a tag is pushed
       - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: "release-${{ github.sha }}"
-          release_name: "Wiktionary IPA Extract - ${{ github.sha }}"
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Step 6: Upload Linux Binary
-      - name: Upload Linux Binary
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./wiktionary-ipa-extract
-          asset_name: wiktionary-ipa-extract-linux
-          asset_content_type: application/octet-stream
-
-      # Step 7: Upload Mac Binary
-      - name: Upload Mac Binary
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./wiktionary-ipa-extract-mac
-          asset_name: wiktionary-ipa-extract-mac
-          asset_content_type: application/octet-stream
+          files: |
+            ./wiktionary-ipa-extract-linux
+            ./wiktionary-ipa-extract-mac
 
   # Job for processing the Wiktionary data based on the RSS feed using the binary
   process-data:
@@ -71,8 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Step 1: Check out the repository
-      - name: Check out repository
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       # Step 2: Fetch RSS and check timestamp
       - name: Fetch RSS and check timestamp
@@ -106,22 +89,10 @@ jobs:
         run: |
           gzip -9 enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl
 
-      # Step 5: Upload Processed JSONL File to GitHub Release
-      - name: Create GitHub Release for Data
-        id: create_release_data
-        uses: actions/create-release@v1
+      # Step 5: Create Release for processed JSONL file
+      - name: Release Processed JSONL File
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: "data-release-${{ steps.check_dump.outputs.latest_dump_date }}"
-          release_name: "Wiktionary Data Processed - ${{ steps.check_dump.outputs.latest_dump_date }}"
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Processed JSONL File
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release_data.outputs.upload_url }}
-          asset_path: ./enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz
-          asset_name: enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz
-          asset_content_type: application/json
+          files: |
+            enwiktionary-latest-pages-articles-${{ steps.check_dump.outputs.latest_dump_date }}.jsonl.gz
