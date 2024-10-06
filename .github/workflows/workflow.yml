@@ -93,7 +93,7 @@ jobs:
       - name: Sanitize and set release tag
         id: sanitize_tag
         run: |
-          sanitized_date=$(echo "${{ env.LATEST_DUMP_DATE }}" | sed 's/[: ]/-/g')
+          sanitized_date=$(echo "${{ env.LATEST_DUMP_DATE }}" | sed 's/^\w*,\s//; s/[: ]/-/g')
           echo "RELEASE_TAG=auto-release-$sanitized_date" >> $GITHUB_ENV
           echo "SANITIZED_DATE=$sanitized_date" >> $GITHUB_ENV
 
