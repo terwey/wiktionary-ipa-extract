@@ -33,7 +33,7 @@ Each entry contains:
 
 1. Install the application using Go:
    ```bash
-   go install github.com/terwey/wiktionary-ipa-extractor@latest
+   go install github.com/terwey/wiktionary-ipa-extract/cmd/wiktionary-ipa-extract@latest
    ```
 
 2. Ensure Go is properly set up and available in your system’s PATH.
