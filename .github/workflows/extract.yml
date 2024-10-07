@@ -26,36 +26,25 @@ jobs:
       - name: Fetch RSS and check timestamp
         id: check_dump
         run: |
-          # Check if last_run_timestamp.txt exists, if not initialize it
-          if [ ! -f last_run_timestamp.txt ]; then
-            echo "none" > last_run_timestamp.txt
-          fi
-
           # Get the latest dump date from the RSS feed
           latest_dump_date=$(curl -s https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2-rss.xml | grep -oP '(?<=<pubDate>).*?(?=</pubDate>)')
 
-          # Read the last run date from the file
-          last_run_date=$(cat last_run_timestamp.txt)
+          # Convert the pubDate format to %y%m%d-%H%M%S for tag comparison
+          tag_timestamp=$(date -d "$latest_dump_date" +'%y%m%d-%H%M%S')
+          release_tag="enwiktionary-$tag_timestamp"
 
-          # Compare dates and proceed if the latest dump is new
-          if [ "$last_run_date" != "$latest_dump_date" ]; then
-            echo "New dump found, proceeding with extraction."
-            echo "$latest_dump_date" > last_run_timestamp.txt
-            echo "LATEST_DUMP_DATE=$latest_dump_date" >> $GITHUB_ENV  # Use environment file instead of set-output
-          else
+          # Check if the tag already exists in the GitHub repository
+          if git ls-remote --tags origin | grep -q "refs/tags/$release_tag"; then
             echo "No new dump available, exiting."
             exit 0
+          else
+            echo "New dump found, proceeding with extraction."
+            echo "LATEST_DUMP_DATE=$latest_dump_date" >> $GITHUB_ENV
+            echo "RELEASE_TAG=$release_tag" >> $GITHUB_ENV
+            echo "TAG_TIMESTAMP=$tag_timestamp" >> $GITHUB_ENV
           fi
 
-      # Step 3: Sanitize the dump date for use in tags and file names
-      - name: Sanitize and set release tag
-        id: sanitize_tag
-        run: |
-          sanitized_date=$(echo "${{ env.LATEST_DUMP_DATE }}" | sed 's/^\w*,\s//; s/[: ]/-/g')
-          echo "RELEASE_TAG=auto-release-$sanitized_date" >> $GITHUB_ENV
-          echo "SANITIZED_DATE=$sanitized_date" >> $GITHUB_ENV
-
-      # Step 4: Check and build the binary if necessary
+      # Step 3: Check and build the binary if necessary
       - name: Check and build binary if necessary
         run: |
           if [ ! -f ./wiktionary-ipa-extract ]; then
@@ -63,17 +52,17 @@ jobs:
             docker run --name go-build-linux -v ${{ github.workspace }}:/workspace -w /workspace golang:latest /bin/bash -c "go build -o wiktionary-ipa-extract cmd/wiktionary-ipa-extract/main.go"
           fi
 
-      # Step 5: Process the latest data dump using the binary
+      # Step 4: Process the latest data dump using the binary
       - name: Process Wiktionary Dump
         run: |
           curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ env.SANITIZED_DATE }}.jsonl
 
-      # Step 6: Gzip the JSONL file
+      # Step 5: Gzip the JSONL file
       - name: Gzip the JSONL file
         run: |
-          gzip -9 enwiktionary-latest-pages-articles-${{ env.SANITIZED_DATE }}.jsonl
+          gzip -9 enwiktionary-latest-pages-articles-${{ env.TAG_TIMESTAMP }}.jsonl
 
-      # Step 7: Create Release for processed JSONL file
+      # Step 6: Create Release for processed JSONL file
       - name: Release Processed JSONL File
         uses: ncipollo/release-action@v1
         with:
@@ -83,4 +72,4 @@ jobs:
           draft: false
           prerelease: false
           artifacts: |
-            enwiktionary-latest-pages-articles-${{ env.SANITIZED_DATE }}.jsonl.gz
+            enwiktionary-${{ env.TAG_TIMESTAMP }}.jsonl.gz
