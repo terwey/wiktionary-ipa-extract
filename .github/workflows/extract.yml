@@ -46,6 +46,7 @@ jobs:
 
       # Step 3: Check and build the binary if necessary
       - name: Check and build binary if necessary
+        if: env.LATEST_DUMP_DATE
         run: |
           if [ ! -f ./wiktionary-ipa-extract ]; then
             docker pull golang:latest
@@ -54,16 +55,19 @@ jobs:
 
       # Step 4: Process the latest data dump using the binary
       - name: Process Wiktionary Dump
+        if: env.LATEST_DUMP_DATE
         run: |
           curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ env.SANITIZED_DATE }}.jsonl
 
       # Step 5: Gzip the JSONL file
       - name: Gzip the JSONL file
+        if: env.LATEST_DUMP_DATE
         run: |
           gzip -9 enwiktionary-latest-pages-articles-${{ env.TAG_TIMESTAMP }}.jsonl
 
       # Step 6: Create Release for processed JSONL file
       - name: Release Processed JSONL File
+        if: env.LATEST_DUMP_DATE
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.RELEASE_TAG }}  # Use the sanitized tag
