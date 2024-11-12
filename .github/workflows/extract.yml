@@ -57,7 +57,7 @@ jobs:
       - name: Process Wiktionary Dump
         if: env.LATEST_DUMP_DATE
         run: |
-          curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ env.SANITIZED_DATE }}.jsonl
+          curl https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2 | ./wiktionary-ipa-extract --bz -o enwiktionary-latest-pages-articles-${{ env.TAG_TIMESTAMP }}.jsonl
 
       # Step 5: Gzip the JSONL file
       - name: Gzip the JSONL file
