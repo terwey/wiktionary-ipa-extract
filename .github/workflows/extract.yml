@@ -76,4 +76,4 @@ jobs:
           draft: false
           prerelease: false
           artifacts: |
-            enwiktionary-${{ env.TAG_TIMESTAMP }}.jsonl.gz
+            enwiktionary-latest-pages-articles-${{ env.TAG_TIMESTAMP }}.jsonl.gz
