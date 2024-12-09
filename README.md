@@ -11,7 +11,7 @@ This Go application processes Wiktionary data dumps to extract the International
 
 ## Most users do not need to install anything
 
-If you simply want the latest processed IPA data, you can head over to the Releases section of this repository and download the latest JSONL file. No need to install or build the application unless you want to process the data yourself.
+If you simply want the latest processed IPA data, you can head over to the [Releases](https://github.com/terwey/wiktionary-ipa-extract/releases) section of this repository and download the latest JSONL file. No need to install or build the application unless you want to process the data yourself.
 
 ## Output Format
 
